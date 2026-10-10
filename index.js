@@ -182,7 +182,7 @@ client.commands.set('help', {
   execute(message) {
     const embed = new EmbedBuilder()
       .setTitle('Commands')
-      .setDescription(client.commands.map(c => `\`!${c.name}\``).join(', '))
+      .setDescription([...client.commands.keys()].map(n => `\`!${n}\``).join(', '))
       .setColor(0x5865F2);
     message.channel.send({ embeds: [embed] });
   }
