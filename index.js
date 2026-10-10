@@ -2,11 +2,13 @@ require('dotenv').config();
 const {
   Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder,
   ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits,
-  Collection
+  Collection, REST, Routes, SlashCommandBuilder
 } = require('discord.js');
 
 const CONFIG = {
-  prefix: '!',
+  token: process.env.TOKEN,
+  clientId: process.env.CLIENT_ID,
+  guildId: process.env.GUILD_ID,
   rulesLogo: 'https://i.imgur.com/2FrFg7k.png',
   rulesImage: 'https://i.imgur.com/2mHTvfv.jpeg',
   ticketImage: 'https://i.imgur.com/2FrFg7k.png',
@@ -23,10 +25,93 @@ const client = new Client({
   ]
 });
 
-client.commands = new Collection();
+// ---------- SLASH COMMAND DEFINITIONS ----------
+const commands = [
+  new SlashCommandBuilder().setName('rules').setDescription('Show server rules'),
+  new SlashCommandBuilder().setName('welcome').setDescription('Show welcome message'),
+  new SlashCommandBuilder().setName('ticket').setDescription('Open a ticket panel'),
+  new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
+  new SlashCommandBuilder().setName('help').setDescription('List all commands'),
+  new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('Make the bot say something')
+    .addStringOption(o => o.setName('text').setDescription('What to say').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('avatar')
+    .setDescription('Show a user avatar')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false)),
+  new SlashCommandBuilder().setName('serverinfo').setDescription('Server info'),
+  new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('User info')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false)),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Delete messages')
+    .addIntegerOption(o => o.setName('amount').setDescription('1-100').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick a user')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('ban')
+    .setDescription('Ban a user')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('timeout')
+    .setDescription('Timeout a user')
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
+    .addIntegerOption(o => o.setName('minutes').setDescription('Minutes').setRequired(true))
+];
 
-client.commands.set('rules', {
-  execute(message) {
+// ---------- REGISTER COMMANDS ----------
+const rest = new REST({ version: '10' }).setToken(CONFIG.token);
+
+client.once('ready', async () => {
+  console.log(`Logged in as ${client.user.tag}`);
+  try {
+    await rest.put(
+      Routes.applicationGuildCommands(CONFIG.clientId, CONFIG.guildId),
+      { body: commands.map(c => c.toJSON()) }
+    );
+    console.log('Slash commands registered.');
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+// ---------- HANDLE SLASH COMMANDS ----------
+client.on('interactionCreate', async (interaction) => {
+  if (interaction.isButton()) {
+    if (interaction.customId !== 'create_ticket') return;
+
+    const guild = interaction.guild;
+    const channel = await guild.channels.create({
+      name: `ticket-${interaction.user.username}`,
+      type: ChannelType.GuildText,
+      parent: CONFIG.ticketCategoryId,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: CONFIG.staffRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+      ]
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle('Ticket Created')
+      .setDescription(`Hello ${interaction.user}, staff will be with you shortly.`)
+      .setColor(0x00FF00);
+
+    channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed] });
+    interaction.reply({ content: `Ticket created: ${channel}`, ephemeral: true });
+    return;
+  }
+
+  if (!interaction.isChatInputCommand()) return;
+  const { commandName } = interaction;
+
+  // RULES
+  if (commandName === 'rules') {
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Server Rules', iconURL: CONFIG.rulesLogo })
       .setThumbnail(CONFIG.rulesLogo)
@@ -43,25 +128,22 @@ client.commands.set('rules', {
       .setImage(CONFIG.rulesImage)
       .setFooter({ text: 'Breaking rules = warning, then punishment.' })
       .setColor(0x5865F2);
-    message.channel.send({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed] });
   }
-});
-client.commands.set('rule', client.commands.get('rules'));
 
-client.commands.set('welcome', {
-  execute(message) {
+  // WELCOME
+  if (commandName === 'welcome') {
     const embed = new EmbedBuilder()
       .setTitle('Welcome!')
       .setDescription('Glad to have you here. Check the rules and enjoy your stay.')
       .setImage(CONFIG.rulesImage)
       .setThumbnail(CONFIG.rulesLogo)
       .setColor(0x00FF00);
-    message.channel.send({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed] });
   }
-});
 
-client.commands.set('ticket', {
-  execute(message) {
+  // TICKET
+  if (commandName === 'ticket') {
     const embed = new EmbedBuilder()
       .setTitle('Create a Ticket')
       .setDescription('Click the button below to open a ticket.')
@@ -75,38 +157,43 @@ client.commands.set('ticket', {
         .setStyle(ButtonStyle.Success)
     );
 
-    message.channel.send({ embeds: [embed], components: [row] });
+    return interaction.reply({ embeds: [embed], components: [row] });
   }
-});
 
-client.commands.set('ping', {
-  execute(message) {
-    message.reply(`Pong! ${client.ws.ping}ms`);
+  // PING
+  if (commandName === 'ping') {
+    return interaction.reply(`Pong! ${client.ws.ping}ms`);
   }
-});
 
-client.commands.set('say', {
-  execute(message, args) {
-    if (!args.length) return message.reply('Give me something to say.');
-    message.delete().catch(() => {});
-    message.channel.send(args.join(' '));
+  // HELP
+  if (commandName === 'help') {
+    const embed = new EmbedBuilder()
+      .setTitle('Commands')
+      .setDescription(commands.map(c => `\`/${c.name}\``).join(', '))
+      .setColor(0x5865F2);
+    return interaction.reply({ embeds: [embed] });
   }
-});
 
-client.commands.set('avatar', {
-  execute(message) {
-    const user = message.mentions.users.first() || message.author;
+  // SAY
+  if (commandName === 'say') {
+    const text = interaction.options.getString('text');
+    await interaction.channel.send(text);
+    return interaction.reply({ content: 'Sent.', ephemeral: true });
+  }
+
+  // AVATAR
+  if (commandName === 'avatar') {
+    const user = interaction.options.getUser('user') || interaction.user;
     const embed = new EmbedBuilder()
       .setTitle(`${user.username}'s Avatar`)
       .setImage(user.displayAvatarURL({ size: 512 }))
       .setColor(0x5865F2);
-    message.channel.send({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed] });
   }
-});
 
-client.commands.set('serverinfo', {
-  execute(message) {
-    const g = message.guild;
+  // SERVERINFO
+  if (commandName === 'serverinfo') {
+    const g = interaction.guild;
     const embed = new EmbedBuilder()
       .setTitle(g.name)
       .setThumbnail(g.iconURL())
@@ -116,14 +203,13 @@ client.commands.set('serverinfo', {
         { name: 'Created', value: `<t:${Math.floor(g.createdTimestamp / 1000)}:R>`, inline: true }
       )
       .setColor(0x5865F2);
-    message.channel.send({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed] });
   }
-});
 
-client.commands.set('userinfo', {
-  execute(message) {
-    const user = message.mentions.users.first() || message.author;
-    const member = message.guild.members.cache.get(user.id);
+  // USERINFO
+  if (commandName === 'userinfo') {
+    const user = interaction.options.getUser('user') || interaction.user;
+    const member = interaction.guild.members.cache.get(user.id);
     const embed = new EmbedBuilder()
       .setTitle(user.username)
       .setThumbnail(user.displayAvatarURL())
@@ -132,113 +218,46 @@ client.commands.set('userinfo', {
         { name: 'Joined', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true }
       )
       .setColor(0x5865F2);
-    message.channel.send({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed] });
   }
-});
 
-client.commands.set('clear', {
-  async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages))
-      return message.reply('No permission.');
-    const amount = parseInt(args[0]);
-    if (!amount || amount < 1 || amount > 100)
-      return message.reply('Give a number 1-100.');
-    await message.channel.bulkDelete(amount, true);
-    const m = await message.channel.send(`Deleted ${amount} messages.`);
-    setTimeout(() => m.delete().catch(() => {}), 3000);
+  // CLEAR
+  if (commandName === 'clear') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages))
+      return interaction.reply({ content: 'No permission.', ephemeral: true });
+    const amount = interaction.options.getInteger('amount');
+    await interaction.channel.bulkDelete(Math.min(amount, 100), true);
+    return interaction.reply({ content: `Deleted ${amount} messages.`, ephemeral: true });
   }
-});
 
-client.commands.set('kick', {
-  async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers))
-      return message.reply('No permission.');
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('Mention a user.');
+  // KICK
+  if (commandName === 'kick') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.KickMembers))
+      return interaction.reply({ content: 'No permission.', ephemeral: true });
+    const member = interaction.options.getMember('user');
     await member.kick();
-    message.channel.send(`Kicked ${member.user.tag}`);
+    return interaction.reply({ content: `Kicked ${member.user.tag}` });
   }
-});
 
-client.commands.set('ban', {
-  async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers))
-      return message.reply('No permission.');
-    const member = message.mentions.members.first();
-    if (!member) return message.reply('Mention a user.');
+  // BAN
+  if (commandName === 'ban') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers))
+      return interaction.reply({ content: 'No permission.', ephemeral: true });
+    const member = interaction.options.getMember('user');
     await member.ban();
-    message.channel.send(`Banned ${member.user.tag}`);
+    return interaction.reply({ content: `Banned ${member.user.tag}` });
   }
-});
 
-client.commands.set('timeout', {
-  async execute(message, args) {
-    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers))
-      return message.reply('No permission.');
-    const member = message.mentions.members.first();
-    const minutes = parseInt(args[1]);
-    if (!member || !minutes) return message.reply('Usage: !timeout @user 10');
+  // TIMEOUT
+  if (commandName === 'timeout') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers))
+      return interaction.reply({ content: 'No permission.', ephemeral: true });
+    const member = interaction.options.getMember('user');
+    const minutes = interaction.options.getInteger('minutes');
     await member.timeout(minutes * 60 * 1000);
-    message.channel.send(`Timed out ${member.user.tag} for ${minutes} min.`);
+    return interaction.reply({ content: `Timed out ${member.user.tag} for ${minutes} min.` });
   }
 });
 
-client.commands.set('help', {
-  execute(message) {
-    const embed = new EmbedBuilder()
-      .setTitle('Commands')
-      .setDescription([...client.commands.keys()].map(n => `\`!${n}\``).join(', '))
-      .setColor(0x5865F2);
-    message.channel.send({ embeds: [embed] });
-  }
-});
-
-client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.content.startsWith(CONFIG.prefix)) return;
-
-  const args = message.content.slice(CONFIG.prefix.length).trim().split(/ +/);
-  const name = args.shift().toLowerCase();
-
-  const command = client.commands.get(name);
-  if (!command) return;
-
-  try {
-    await command.execute(message, args);
-  } catch (err) {
-    console.error(err);
-    message.reply('Error running command.');
-  }
-});
-
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== 'create_ticket') return;
-
-  const guild = interaction.guild;
-
-  const channel = await guild.channels.create({
-    name: `ticket-${interaction.user.username}`,
-    type: ChannelType.GuildText,
-    parent: CONFIG.ticketCategoryId,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-      { id: CONFIG.staffRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
-    ]
-  });
-
-  const embed = new EmbedBuilder()
-    .setTitle('Ticket Created')
-    .setDescription(`Hello ${interaction.user}, staff will be with you shortly.`)
-    .setColor(0x00FF00);
-
-  channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed] });
-  interaction.reply({ content: `Ticket created: ${channel}`, ephemeral: true });
-});
-
-client.login(process.env.TOKEN);
+// ---------- LOGIN ----------
+client.login(CONFIG.token);
