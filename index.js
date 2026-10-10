@@ -7,9 +7,9 @@ const {
 
 const CONFIG = {
   prefix: '!',
-  rulesLogo: 'https://kommodo.ai/i/SxkiDdAQtrYjk2pfcRjT',
-  rulesImage: 'https://kommodo.ai/i/UpUKuhxztZNQ3fY7yYq5',
-  ticketImage: 'https://kommodo.ai/i/SxkiDdAQtrYjk2pfcRjT',
+  rulesLogo: 'https://i.imgur.com/2FrFg7k.png',
+  rulesImage: 'https://i.imgur.com/2mHTvfv.jpeg',
+  ticketImage: 'https://i.imgur.com/2FrFg7k.png',
   staffRoleId: 'STAFF_ROLE_ID_HERE',
   ticketCategoryId: 'CATEGORY_ID_HERE'
 };
@@ -47,6 +47,18 @@ client.commands.set('rules', {
   }
 });
 client.commands.set('rule', client.commands.get('rules'));
+
+client.commands.set('welcome', {
+  execute(message) {
+    const embed = new EmbedBuilder()
+      .setTitle('Welcome!')
+      .setDescription('Glad to have you here. Check the rules and enjoy your stay.')
+      .setImage(CONFIG.rulesImage)
+      .setThumbnail(CONFIG.rulesLogo)
+      .setColor(0x00FF00);
+    message.channel.send({ embeds: [embed] });
+  }
+});
 
 client.commands.set('ticket', {
   execute(message) {
