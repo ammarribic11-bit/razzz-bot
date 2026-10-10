@@ -2,7 +2,7 @@ require('dotenv').config();
 const {
   Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder,
   ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits,
-  Collection, REST, Routes, SlashCommandBuilder
+  REST, Routes, SlashCommandBuilder
 } = require('discord.js');
 
 const CONFIG = {
@@ -25,46 +25,53 @@ const client = new Client({
   ]
 });
 
-// ---------- SLASH COMMAND DEFINITIONS ----------
+// ---------- SLASH COMMANDS (ADMIN ONLY) ----------
 const commands = [
-  new SlashCommandBuilder().setName('rules').setDescription('Show server rules'),
-  new SlashCommandBuilder().setName('welcome').setDescription('Show welcome message'),
-  new SlashCommandBuilder().setName('ticket').setDescription('Open a ticket panel'),
-  new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
-  new SlashCommandBuilder().setName('help').setDescription('List all commands'),
+  new SlashCommandBuilder().setName('rules').setDescription('Show server rules').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder().setName('welcome').setDescription('Show welcome message').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder().setName('ticket').setDescription('Open a ticket panel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder().setName('ping').setDescription('Check bot latency').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder().setName('help').setDescription('List all commands').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('say')
     .setDescription('Make the bot say something')
-    .addStringOption(o => o.setName('text').setDescription('What to say').setRequired(true)),
+    .addStringOption(o => o.setName('text').setDescription('What to say').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('avatar')
     .setDescription('Show a user avatar')
-    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false)),
-  new SlashCommandBuilder().setName('serverinfo').setDescription('Server info'),
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder().setName('serverinfo').setDescription('Server info').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('userinfo')
     .setDescription('User info')
-    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false)),
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Delete messages')
-    .addIntegerOption(o => o.setName('amount').setDescription('1-100').setRequired(true)),
+    .addIntegerOption(o => o.setName('amount').setDescription('1-100').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('kick')
     .setDescription('Kick a user')
-    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true)),
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Ban a user')
-    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true)),
+    .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('timeout')
     .setDescription('Timeout a user')
     .addUserOption(o => o.setName('user').setDescription('User').setRequired(true))
     .addIntegerOption(o => o.setName('minutes').setDescription('Minutes').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 ];
 
-// ---------- REGISTER COMMANDS ----------
+// ---------- REGISTER ----------
 const rest = new REST({ version: '10' }).setToken(CONFIG.token);
 
 client.once('ready', async () => {
@@ -74,14 +81,15 @@ client.once('ready', async () => {
       Routes.applicationGuildCommands(CONFIG.clientId, CONFIG.guildId),
       { body: commands.map(c => c.toJSON()) }
     );
-    console.log('Slash commands registered.');
+    console.log('Slash commands registered (admin only).');
   } catch (err) {
     console.error(err);
   }
 });
 
-// ---------- HANDLE SLASH COMMANDS ----------
+// ---------- HANDLE ----------
 client.on('interactionCreate', async (interaction) => {
+  // Ticket button
   if (interaction.isButton()) {
     if (interaction.customId !== 'create_ticket') return;
 
@@ -108,9 +116,14 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (!interaction.isChatInputCommand()) return;
+
+  // Double-check admin (in case someone bypasses the default permissions)
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({ content: 'You need Administrator permission.', ephemeral: true });
+  }
+
   const { commandName } = interaction;
 
-  // RULES
   if (commandName === 'rules') {
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Server Rules', iconURL: CONFIG.rulesLogo })
@@ -131,7 +144,6 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // WELCOME
   if (commandName === 'welcome') {
     const embed = new EmbedBuilder()
       .setTitle('Welcome!')
@@ -142,7 +154,6 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // TICKET
   if (commandName === 'ticket') {
     const embed = new EmbedBuilder()
       .setTitle('Create a Ticket')
@@ -160,28 +171,24 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed], components: [row] });
   }
 
-  // PING
   if (commandName === 'ping') {
-    return interaction.reply(`Pong! ${client.ws.ping}ms`);
+    return interaction.reply({ content: `Pong! ${client.ws.ping}ms`, ephemeral: true });
   }
 
-  // HELP
   if (commandName === 'help') {
     const embed = new EmbedBuilder()
       .setTitle('Commands')
       .setDescription(commands.map(c => `\`/${c.name}\``).join(', '))
       .setColor(0x5865F2);
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // SAY
   if (commandName === 'say') {
     const text = interaction.options.getString('text');
     await interaction.channel.send(text);
     return interaction.reply({ content: 'Sent.', ephemeral: true });
   }
 
-  // AVATAR
   if (commandName === 'avatar') {
     const user = interaction.options.getUser('user') || interaction.user;
     const embed = new EmbedBuilder()
@@ -191,7 +198,6 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // SERVERINFO
   if (commandName === 'serverinfo') {
     const g = interaction.guild;
     const embed = new EmbedBuilder()
@@ -206,7 +212,6 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // USERINFO
   if (commandName === 'userinfo') {
     const user = interaction.options.getUser('user') || interaction.user;
     const member = interaction.guild.members.cache.get(user.id);
@@ -221,37 +226,25 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ embeds: [embed] });
   }
 
-  // CLEAR
   if (commandName === 'clear') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages))
-      return interaction.reply({ content: 'No permission.', ephemeral: true });
     const amount = interaction.options.getInteger('amount');
     await interaction.channel.bulkDelete(Math.min(amount, 100), true);
     return interaction.reply({ content: `Deleted ${amount} messages.`, ephemeral: true });
   }
 
-  // KICK
   if (commandName === 'kick') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.KickMembers))
-      return interaction.reply({ content: 'No permission.', ephemeral: true });
     const member = interaction.options.getMember('user');
     await member.kick();
     return interaction.reply({ content: `Kicked ${member.user.tag}` });
   }
 
-  // BAN
   if (commandName === 'ban') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers))
-      return interaction.reply({ content: 'No permission.', ephemeral: true });
     const member = interaction.options.getMember('user');
     await member.ban();
     return interaction.reply({ content: `Banned ${member.user.tag}` });
   }
 
-  // TIMEOUT
   if (commandName === 'timeout') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers))
-      return interaction.reply({ content: 'No permission.', ephemeral: true });
     const member = interaction.options.getMember('user');
     const minutes = interaction.options.getInteger('minutes');
     await member.timeout(minutes * 60 * 1000);
@@ -259,5 +252,4 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// ---------- LOGIN ----------
 client.login(CONFIG.token);
