@@ -8,8 +8,9 @@ const {
 // ---------- CONFIG ----------
 const CONFIG = {
   prefix: '!',
-  rulesImage: 'https://your-image-url.png',
-  ticketImage: 'https://your-ticket-image.png',
+  rulesLogo: 'https://kommodo.ai/i/SxkiDdAQtrYjk2pfcRjT',
+  rulesImage: 'https://kommodo.ai/i/UpUKuhxztZNQ3fY7yYq5',
+  ticketImage: 'https://kommodo.ai/i/SxkiDdAQtrYjk2pfcRjT',
   staffRoleId: 'STAFF_ROLE_ID_HERE',
   ticketCategoryId: 'CATEGORY_ID_HERE'
 };
@@ -26,18 +27,31 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// ---------- COMMANDS ----------
+// ---------- RULES ----------
 client.commands.set('rules', {
   execute(message) {
     const embed = new EmbedBuilder()
-      .setTitle('Server Rules')
-      .setDescription('Read and follow these rules.')
+      .setAuthor({ name: 'Server Rules', iconURL: CONFIG.rulesLogo })
+      .setThumbnail(CONFIG.rulesLogo)
+      .setDescription(
+        '**1.** Be respectful to everyone.\n' +
+        '**2.** No swearing — keep it clean and nice.\n' +
+        '**3.** No spam, no advertising.\n' +
+        '**4.** No NSFW content anywhere.\n' +
+        '**5.** Use the correct channels for the correct topics.\n' +
+        '**6.** No drama — take issues to DMs or staff.\n' +
+        '**7.** Follow staff instructions at all times.\n' +
+        '**8.** Have fun and enjoy the server!'
+      )
       .setImage(CONFIG.rulesImage)
+      .setFooter({ text: 'Breaking rules = warning, then punishment.' })
       .setColor(0x5865F2);
     message.channel.send({ embeds: [embed] });
   }
 });
+client.commands.set('rule', client.commands.get('rules'));
 
+// ---------- TICKET ----------
 client.commands.set('ticket', {
   execute(message) {
     const embed = new EmbedBuilder()
@@ -57,6 +71,7 @@ client.commands.set('ticket', {
   }
 });
 
+// ---------- UTILITY ----------
 client.commands.set('ping', {
   execute(message) {
     message.reply(`Pong! ${client.ws.ping}ms`);
@@ -114,6 +129,7 @@ client.commands.set('userinfo', {
   }
 });
 
+// ---------- MODERATION ----------
 client.commands.set('clear', {
   async execute(message, args) {
     if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages))
@@ -161,6 +177,7 @@ client.commands.set('timeout', {
   }
 });
 
+// ---------- HELP ----------
 client.commands.set('help', {
   execute(message) {
     const embed = new EmbedBuilder()
